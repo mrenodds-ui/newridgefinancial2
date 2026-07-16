@@ -178,6 +178,12 @@
     }
 
     wireForceClose(readyData, ready.ok);
+    if (W.bindVerifyBeamButton) {
+      W.bindVerifyBeamButton("btn-verify-beam", {
+        hintId: "hint-beam-proof",
+        valId: "val-beam-proof",
+      });
+    }
     const btn = document.getElementById("btn-force-close");
     if (btn && !btn.classList.contains("busy")) {
       const available = W.forceCloseAvailable

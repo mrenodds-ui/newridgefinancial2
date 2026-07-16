@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12035-period-close-ops-notify",
-  "BUILD_ID": "nr2-12035-period-close-ops-notify",
-  "assetVersion": "nr2-12035-period-close-ops-notify",
-  "builtAt": "2026-07-15T23:20:00.000Z",
-  "notes": "nr2-12035-period-close-ops-notify: HAL hub OPS alerts for attest_only / blocked / Force Close start+done / laser stall>5m (BlueNote has no programmatic send). Dedupe+throttle. SoftDent write-back forbidden. empty ≠ $0.",
+  "schemaVersion": "nr2-12036-beamhash-desk-proof",
+  "BUILD_ID": "nr2-12036-beamhash-desk-proof",
+  "assetVersion": "nr2-12036-beamhash-desk-proof",
+  "builtAt": "2026-07-16T00:50:00.000Z",
+  "notes": "nr2-12036-beamhash-desk-proof: dataBeamHash + 3s attest cache; GET /api/hal/tools/beam-verify; Hub/OM VERIFY BEAM; HAL money replies cite hashes. SoftDent write-back forbidden. empty ≠ $0.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12035-PERIOD-CLOSE-OPS-NOTIFY",
+  "package": "NR2-12036-BEAMHASH-DESK-PROOF",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

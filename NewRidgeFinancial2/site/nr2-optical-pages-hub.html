@@ -25,6 +25,12 @@
           <div class="val hal" id="hub-close">—</div>
           <p class="hint" id="hint-close">GET /api/import-readiness · periodClose</p>
           <button type="button" id="btn-force-close" disabled title="SoftDent pull when lasers red or close stalled; else attest-only">FORCE CLOSE</button>
+          <button type="button" id="btn-verify-beam" title="Compare live dataBeamHash vs period-close snapshot">VERIFY BEAM</button>
+        </div>
+        <div class="card">
+          <h3>Beam desk proof</h3>
+          <div class="val" id="hub-beam-proof">—</div>
+          <p class="hint" id="hint-beam-proof">GET /api/hal/tools/beam-verify · dataBeamHash identity</p>
         </div>
         <div class="card">
           <h3>Main Bench</h3>

@@ -53,6 +53,7 @@ RATE_LIMIT_EXEMPT_PATHS = frozenset(
         "/api/hal/tools/softdent-status",
         "/api/hal/tools/qb-summary",
         "/api/hal/tools/money-beams",
+        "/api/hal/tools/beam-verify",
         "/api/hal/actions/pending",
     }
 )

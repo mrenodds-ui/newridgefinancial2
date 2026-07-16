@@ -674,6 +674,7 @@ def run_period_close(
             "forceClose": bool(force_close),
             "laserClear": True,
             "beamHash": attest.get("beamHash"),
+            "dataBeamHash": attest.get("dataBeamHash"),
             "beamTimestamp": attest.get("beamTimestamp") or attest.get("at"),
             "softdentTotal": sd.get("totalOutstanding"),
             "softdentDisplay": sd.get("display"),
@@ -700,14 +701,18 @@ def run_period_close(
                 "completedAt": completed_at,
                 "laserClear": True,
                 "beamHash": entry.get("beamHash"),
+                "dataBeamHash": entry.get("dataBeamHash"),
                 "shadowStartedAt": shadow_started,
                 "systemOfRecord": False,
                 "buildStamp": build_stamp,
                 "lastClose": {
                     "completedAt": completed_at,
                     "beamHash": entry.get("beamHash"),
+                    "dataBeamHash": entry.get("dataBeamHash"),
                     "softdentDisplay": entry.get("softdentDisplay"),
+                    "softdentTotal": entry.get("softdentTotal"),
                     "qbDisplay": entry.get("qbDisplay"),
+                    "qbRevenue": entry.get("qbRevenue"),
                 },
             }
         )

@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import hashlib
 import re
+import threading
+import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -22,6 +24,10 @@ _PENDING: dict[str, dict[str, Any]] = {}
 
 # Beam attestation considered stale for optical banner / gate after this many seconds
 MONEY_BEAM_STALE_SECONDS = 300
+# Desk proof: HAL chat + optical share one attest snapshot within this window.
+BEAM_ATTEST_CACHE_TTL_SEC = 3.0
+_attest_cache_lock = threading.Lock()
+_attest_cache: dict[str, Any] = {"at_mono": 0.0, "payload": None}
 
 _MONEY_QUERY_RE = re.compile(
     r"(?i)("
@@ -187,21 +193,92 @@ def qb_summary() -> dict[str, Any]:
     return out
 
 
-def money_beam_attestation(*, readiness: dict[str, Any] | None = None) -> dict[str, Any]:
+def compute_beam_hashes(
+    softdent: dict[str, Any] | None,
+    quickbooks: dict[str, Any] | None,
+    *,
+    at: str | None = None,
+) -> dict[str, str]:
+    """Canonical money-beam hashes.
+
+    dataBeamHash — stable while SoftDent/QB displays+totals match (desk proof identity).
+    beamHash — includes attest timestamp (unique snapshot id for JSONL / close).
+    """
+    sd = softdent if isinstance(softdent, dict) else {}
+    qb = quickbooks if isinstance(quickbooks, dict) else {}
+    data_src = "|".join(
+        [
+            str(sd.get("display")),
+            str(sd.get("totalOutstanding")),
+            str(qb.get("display")),
+            str(qb.get("monthlyRevenue")),
+        ]
+    )
+    data_hash = hashlib.sha256(data_src.encode("utf-8")).hexdigest()[:16]
+    stamp = str(at or _utc_now())
+    beam_hash = hashlib.sha256((data_src + "|" + stamp).encode("utf-8")).hexdigest()[:16]
+    return {"dataBeamHash": data_hash, "beamHash": beam_hash, "beamTimestamp": stamp}
+
+
+def clear_beam_attest_cache() -> None:
+    with _attest_cache_lock:
+        _attest_cache["at_mono"] = 0.0
+        _attest_cache["payload"] = None
+
+
+def money_beam_attestation(
+    *,
+    readiness: dict[str, Any] | None = None,
+    bypass_cache: bool = False,
+) -> dict[str, Any]:
     """Attest SoftDent + QB money beams for HAL chat (empty ≠ $0 · no invented currency).
 
-    Injected into the chat system prompt so HAL must cite live beam state and
-    never fill ∅ with $0. Includes beamHash + allowedAmounts for reply validation.
+    Includes beamHash + dataBeamHash. Short TTL cache so HAL and optical share one snapshot.
     """
+    if not bypass_cache:
+        with _attest_cache_lock:
+            age = time.monotonic() - float(_attest_cache.get("at_mono") or 0.0)
+            cached = _attest_cache.get("payload")
+            if cached and age < BEAM_ATTEST_CACHE_TTL_SEC:
+                out = dict(cached)
+                if isinstance(readiness, dict):
+                    ready = readiness
+                    level = str(ready.get("level") or "").lower()
+                    age_hours = ready.get("ageHours")
+                    try:
+                        age_h = float(age_hours) if age_hours is not None else None
+                    except (TypeError, ValueError):
+                        age_h = None
+                    blocking = ready.get("blocking") if isinstance(ready.get("blocking"), list) else []
+                    lasers = (
+                        ready.get("alignmentLasers")
+                        if isinstance(ready.get("alignmentLasers"), dict)
+                        else {}
+                    )
+                    import_stale = (
+                        level in ("stale", "degraded", "missing", "error", "unknown")
+                        or bool(blocking)
+                        or lasers.get("red") is True
+                        or (
+                            age_h is not None
+                            and age_h * 3600 > MONEY_BEAM_STALE_SECONDS
+                            and level != "fresh"
+                        )
+                    )
+                    out["importStale"] = bool(import_stale)
+                    out["importLevel"] = level or None
+                out["cached"] = True
+                return out
+
     sd = softdent_status()
     qb = qb_summary()
     at = _utc_now()
+    hashes = compute_beam_hashes(sd, qb, at=at)
     allowed: list[float] = []
     for key_src, key in ((sd, "totalOutstanding"), (qb, "monthlyRevenue")):
         val = key_src.get(key)
         if val is not None and _finite(val):
             allowed.append(float(val))
-            # Also permit common display rounding (whole dollars)
             allowed.append(float(round(float(val))))
             allowed.append(float(round(float(val), 2)))
 
@@ -212,7 +289,6 @@ def money_beam_attestation(*, readiness: dict[str, Any] | None = None) -> dict[s
         age_h = float(age_hours) if age_hours is not None else None
     except (TypeError, ValueError):
         age_h = None
-    # Import soft-stale / stale / critical blocking → prefer UNAVAILABLE over invent
     blocking = ready.get("blocking") if isinstance(ready.get("blocking"), list) else []
     lasers = ready.get("alignmentLasers") if isinstance(ready.get("alignmentLasers"), dict) else {}
     import_stale = (
@@ -222,22 +298,13 @@ def money_beam_attestation(*, readiness: dict[str, Any] | None = None) -> dict[s
         or (age_h is not None and age_h * 3600 > MONEY_BEAM_STALE_SECONDS and level != "fresh")
     )
 
-    hash_src = "|".join(
-        [
-            str(sd.get("display")),
-            str(sd.get("totalOutstanding")),
-            str(qb.get("display")),
-            str(qb.get("monthlyRevenue")),
-            at,
-        ]
-    )
-    beam_hash = hashlib.sha256(hash_src.encode("utf-8")).hexdigest()[:16]
-
+    beam_hash = hashes["beamHash"]
+    data_hash = hashes["dataBeamHash"]
     lines = [
         "LIVE MONEY BEAMS (cite ONLY these SoftDent/QB displays for currency; never invent other dollars):",
         f"- SoftDent claims: {sd.get('display')} · hasData={bool(sd.get('hasData'))} · {sd.get('hint') or ''}",
         f"- QuickBooks revenue: {qb.get('display')} · hasData={bool(qb.get('hasData'))} · {qb.get('hint') or ''}",
-        f"- beamTimestamp={at} · beamHash={beam_hash}",
+        f"- beamTimestamp={at} · beamHash={beam_hash} · dataBeamHash={data_hash}",
         "If a beam is ∅ NO SIGNAL / hasData=false: say Financial data unavailable for that source — never $0.",
     ]
     if sd.get("display") == "∅ NO SIGNAL" or qb.get("display") == "∅ NO SIGNAL":
@@ -249,16 +316,18 @@ def money_beam_attestation(*, readiness: dict[str, Any] | None = None) -> dict[s
             f"IMPORT READINESS {level or 'unknown'} — prefer UNAVAILABLE over invented dollars when unsure."
         )
 
-    return {
+    payload = {
         "ok": True,
         "emptyNotZero": True,
         "at": at,
         "beamTimestamp": at,
         "beamHash": beam_hash,
+        "dataBeamHash": data_hash,
         "staleMaxSeconds": MONEY_BEAM_STALE_SECONDS,
         "importStale": bool(import_stale),
         "importLevel": level or None,
         "allowedAmounts": allowed,
+        "cached": False,
         "softdent": {
             "hasData": sd.get("hasData"),
             "display": sd.get("display"),
@@ -275,6 +344,63 @@ def money_beam_attestation(*, readiness: dict[str, Any] | None = None) -> dict[s
         },
         "promptBlock": "\n".join(lines),
     }
+    with _attest_cache_lock:
+        _attest_cache["at_mono"] = time.monotonic()
+        _attest_cache["payload"] = dict(payload)
+    return payload
+
+
+def beam_desk_proof(*, readiness: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Formal desk proof: live money beams vs period-close snapshot (dataBeamHash identity)."""
+    live = money_beam_attestation(readiness=readiness)
+    close: dict[str, Any] = {}
+    try:
+        from daily_closeout import period_close_status
+
+        close = period_close_status()
+    except Exception as exc:  # noqa: BLE001
+        close = {"ok": False, "error": str(exc)[:160]}
+
+    live_data = str(live.get("dataBeamHash") or "")
+    live_beam = str(live.get("beamHash") or "")
+    close_beam = str(close.get("beamHash") or "")
+    close_data = ""
+    last = close.get("lastClose") if isinstance(close.get("lastClose"), dict) else {}
+    if last.get("dataBeamHash"):
+        close_data = str(last.get("dataBeamHash") or "")
+    if not close_data and (last.get("softdentDisplay") is not None or last.get("qbDisplay") is not None):
+        close_data = compute_beam_hashes(
+            {"display": last.get("softdentDisplay"), "totalOutstanding": last.get("softdentTotal")},
+            {"display": last.get("qbDisplay"), "monthlyRevenue": last.get("qbRevenue")},
+        )["dataBeamHash"]
+
+    match = bool(live_data and close_data and live_data == close_data)
+    return {
+        "ok": True,
+        "emptyNotZero": True,
+        "hashFormat": "sha256-16",
+        "live": {
+            "beamHash": live_beam,
+            "dataBeamHash": live_data,
+            "beamTimestamp": live.get("beamTimestamp") or live.get("at"),
+            "softdent": live.get("softdent"),
+            "quickbooks": live.get("quickbooks"),
+            "importStale": live.get("importStale"),
+            "cached": live.get("cached"),
+        },
+        "periodClose": {
+            "status": close.get("status"),
+            "beamHash": close_beam or None,
+            "dataBeamHash": close_data or None,
+            "completedAt": close.get("completedAt"),
+            "forceClose": close.get("forceClose"),
+        },
+        "match": {
+            "liveDataEqualsCloseData": match,
+            "note": "dataBeamHash compares SoftDent/QB displays+totals; beamHash includes attest time.",
+        },
+        "deskProof": "MATCH" if match else ("NO CLOSE HASH" if not close_data else "MISMATCH"),
+    }
 
 
 def try_deterministic_money_reply(query: str, attest: dict[str, Any] | None = None) -> dict[str, Any] | None:
@@ -287,6 +413,8 @@ def try_deterministic_money_reply(query: str, attest: dict[str, Any] | None = No
     qb = att.get("quickbooks") if isinstance(att.get("quickbooks"), dict) else {}
     ts = str(att.get("beamTimestamp") or att.get("at") or _utc_now())
     beam_hash = str(att.get("beamHash") or "")
+    data_hash = str(att.get("dataBeamHash") or "")
+    hash_cite = f"beamHash={beam_hash}" + (f" dataBeamHash={data_hash}" if data_hash else "")
 
     ar_ask = bool(_AR_QUERY_RE.search(q))
     rev_ask = bool(_QB_REVENUE_RE.search(q)) and not ar_ask
@@ -295,7 +423,7 @@ def try_deterministic_money_reply(query: str, attest: dict[str, Any] | None = No
         if not sd.get("hasData") or sd.get("totalOutstanding") is None:
             text = (
                 "Financial data unavailable (source: SoftDent). "
-                "empty ≠ $0 — SoftDent claims beam has no live total."
+                f"empty ≠ $0 — SoftDent claims beam has no live total. ({hash_cite})"
             )
             return {
                 "ok": True,
@@ -303,6 +431,7 @@ def try_deterministic_money_reply(query: str, attest: dict[str, Any] | None = No
                 "moneyGrounded": True,
                 "beamTimestamp": ts,
                 "beamHash": beam_hash,
+                "dataBeamHash": data_hash or None,
                 "routingReason": "money_honesty_deterministic_softdent_unavailable",
                 "source": "SoftDent",
                 "unavailable": True,
@@ -310,7 +439,7 @@ def try_deterministic_money_reply(query: str, attest: dict[str, Any] | None = No
         total = float(sd["totalOutstanding"])
         text = (
             f"${total:,.0f} outstanding (SoftDent live, synced {ts}). "
-            "Grounded to SoftDent claims beam — empty ≠ $0."
+            f"Grounded to SoftDent claims beam — empty ≠ $0. ({hash_cite})"
         )
         return {
             "ok": True,
@@ -318,6 +447,7 @@ def try_deterministic_money_reply(query: str, attest: dict[str, Any] | None = No
             "moneyGrounded": True,
             "beamTimestamp": ts,
             "beamHash": beam_hash,
+            "dataBeamHash": data_hash or None,
             "routingReason": "money_honesty_deterministic_softdent",
             "source": "SoftDent",
             "amount": total,
@@ -327,7 +457,7 @@ def try_deterministic_money_reply(query: str, attest: dict[str, Any] | None = No
         if not qb.get("hasData") or qb.get("monthlyRevenue") is None:
             text = (
                 "Financial data unavailable (source: QuickBooks). "
-                "empty ≠ $0 — QB revenue beam has no live total."
+                f"empty ≠ $0 — QB revenue beam has no live total. ({hash_cite})"
             )
             return {
                 "ok": True,
@@ -335,6 +465,7 @@ def try_deterministic_money_reply(query: str, attest: dict[str, Any] | None = No
                 "moneyGrounded": True,
                 "beamTimestamp": ts,
                 "beamHash": beam_hash,
+                "dataBeamHash": data_hash or None,
                 "routingReason": "money_honesty_deterministic_qb_unavailable",
                 "source": "QuickBooks",
                 "unavailable": True,
@@ -342,7 +473,7 @@ def try_deterministic_money_reply(query: str, attest: dict[str, Any] | None = No
         rev = float(qb["monthlyRevenue"])
         text = (
             f"${rev:,.0f} (QuickBooks latest-month revenue, synced {ts}). "
-            "Grounded to QB beam — empty ≠ $0."
+            f"Grounded to QB beam — empty ≠ $0. ({hash_cite})"
         )
         return {
             "ok": True,
@@ -350,6 +481,7 @@ def try_deterministic_money_reply(query: str, attest: dict[str, Any] | None = No
             "moneyGrounded": True,
             "beamTimestamp": ts,
             "beamHash": beam_hash,
+            "dataBeamHash": data_hash or None,
             "routingReason": "money_honesty_deterministic_qb",
             "source": "QuickBooks",
             "amount": rev,

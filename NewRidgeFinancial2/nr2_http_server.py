@@ -1390,6 +1390,16 @@ class NR2BottleServer(BottleServer):
                 )
             )
 
+        @app.get("/api/hal/tools/beam-verify")
+        def hal_beam_verify_api():
+            """Formal desk proof: live dataBeamHash vs period-close snapshot."""
+            from hal_brain_tools import beam_desk_proof
+
+            readiness = _get_import_readiness()
+            return _json_response(
+                beam_desk_proof(readiness=readiness if isinstance(readiness, dict) else None)
+            )
+
         @app.get("/api/hal/tools/period-close-status")
         def hal_period_close_status_api():
             """Shadow period-close status — cites daily_close_log.jsonl only."""

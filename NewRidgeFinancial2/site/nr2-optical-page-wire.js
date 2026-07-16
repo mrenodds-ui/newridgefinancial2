@@ -223,11 +223,91 @@
     if (!beams) return "money-beams · NO SIGNAL";
     const close = ready && ready.periodClose;
     const parts = [
-      "beamHash " + String(beams.beamHash || "n/a"),
+      "dataHash " + formatBeamHash(beams.dataBeamHash || beams.beamHash, 16),
+      "beamHash " + formatBeamHash(beams.beamHash, 16),
       beams.beamTimestamp ? "at " + String(beams.beamTimestamp).slice(0, 19) : "",
       close && close.completedAt ? "close " + String(close.completedAt).slice(0, 19) : "",
     ].filter(Boolean);
     return parts.join(" · ");
+  }
+  function formatBeamHash(h, len) {
+    const s = String(h || "").trim();
+    if (!s) return "n/a";
+    const n = typeof len === "number" && len > 0 ? len : 16;
+    return s.slice(0, n);
+  }
+  function hashesMatch(a, b) {
+    const x = String(a || "").trim().toLowerCase();
+    const y = String(b || "").trim().toLowerCase();
+    if (!x || !y || x === "n/a" || y === "n/a") return false;
+    const n = Math.min(x.length, y.length, 16);
+    return x.slice(0, n) === y.slice(0, n);
+  }
+  async function fetchBeamVerify(timeoutMs) {
+    return getJson("/api/hal/tools/beam-verify", timeoutMs || 12000);
+  }
+  function bindVerifyBeamButton(btnId, opts) {
+    const btn = document.getElementById(btnId || "btn-verify-beam");
+    if (!btn || btn._nr2VerifyBound) return btn;
+    btn._nr2VerifyBound = true;
+    const o = opts || {};
+    btn.disabled = false;
+    btn.addEventListener("click", function () {
+      if (btn.classList.contains("busy")) return;
+      btn.classList.add("busy");
+      btn.disabled = true;
+      const label = btn.textContent;
+      btn.textContent = "VERIFYING…";
+      fetchBeamVerify(12000)
+        .then(function (res) {
+          const data = (res && res.data) || {};
+          const live = data.live || {};
+          const close = data.periodClose || {};
+          const proof = String(data.deskProof || "NO SIGNAL");
+          const liveData = formatBeamHash(live.dataBeamHash, 16);
+          const closeData = formatBeamHash(close.dataBeamHash, 16);
+          const bit =
+            "VERIFY BEAM · " +
+            proof +
+            " · live " +
+            liveData +
+            " · close " +
+            closeData +
+            " · empty ≠ $0";
+          if (typeof o.onDone === "function") {
+            o.onDone({ ok: !!(res && res.ok && data.ok), res: res, bit: bit, data: data });
+          } else if (typeof setBanner === "function") {
+            setBanner(proof === "MATCH" ? "live" : "partial", bit);
+          }
+          if (o.hintId) {
+            const hint = document.getElementById(o.hintId);
+            if (hint) hint.textContent = bit;
+          }
+          if (o.valId) {
+            const el = document.getElementById(o.valId);
+            if (el) {
+              el.textContent = proof;
+              el.classList.remove("stale", "hal", "sd");
+              el.classList.add(proof === "MATCH" ? "hal" : "stale");
+            }
+          }
+        })
+        .catch(function (err) {
+          if (typeof setBanner === "function") {
+            setBanner(
+              "partial",
+              "VERIFY BEAM · fault · " + String(err && err.message ? err.message : err)
+            );
+          }
+        })
+        .finally(function () {
+          btn.classList.remove("busy");
+          btn.textContent = label || "VERIFY BEAM";
+          btn.disabled = false;
+          if (typeof o.onFinally === "function") o.onFinally();
+        });
+    });
+    return btn;
   }
   function periodCloseStatus(ready) {
     const close = ready && ready.periodClose;
@@ -352,5 +432,9 @@
     forceCloseAvailable: forceCloseAvailable,
     forcePeriodClose: forcePeriodClose,
     bindForceCloseButton: bindForceCloseButton,
+    formatBeamHash: formatBeamHash,
+    hashesMatch: hashesMatch,
+    fetchBeamVerify: fetchBeamVerify,
+    bindVerifyBeamButton: bindVerifyBeamButton,
   };
 })(window);
