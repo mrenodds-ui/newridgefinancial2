@@ -1021,5 +1021,23 @@
         if (slot) slot.textContent = "HalPageCanvas mounted · feed widgets when Apex feed available";
       }
     } catch (_) {}
+    try {
+      const params = new URLSearchParams(window.location.search || "");
+      const ph = String(params.get("patientHash") || "").replace(/^#/, "").trim();
+      if (ph && input) {
+        input.value = "Summarize SoftDent patient hash #" + ph.slice(0, 4) + " — insurance, claims, clinical notes. empty ≠ $0.";
+        input.focus();
+        addMsg(
+          "hal",
+          "OM schedule handoff · patient hash #" +
+            ph.slice(0, 4) +
+            " · draft ready in compose · SoftDent read-only · empty ≠ $0"
+        );
+        if (chatBind) {
+          chatBind.textContent =
+            "OM patient context · hash #" + ph.slice(0, 4) + " · POST /api/hal/chat when you transmit";
+        }
+      }
+    } catch (_) {}
   })();
 })();

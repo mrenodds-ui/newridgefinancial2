@@ -131,6 +131,60 @@
       note.textContent = String(data.schemaGap);
       body.appendChild(note);
     }
+
+    const claims = data.claims && typeof data.claims === "object" ? data.claims : null;
+    const claimItems = claims && Array.isArray(claims.items) ? claims.items : [];
+    const claimsHead = document.createElement("h4");
+    claimsHead.className = "wk-dossier-sub";
+    claimsHead.textContent = "Claims (SoftDent)";
+    body.appendChild(claimsHead);
+    if (!claimItems.length) {
+      const empty = document.createElement("p");
+      empty.className = "wk-dossier-muted";
+      empty.textContent =
+        (claims && (claims.emptyMessage || claims.error)) ||
+        "No SoftDent claims for this patient.";
+      body.appendChild(empty);
+    } else {
+      const ul = document.createElement("ul");
+      ul.className = "wk-claim-list";
+      claimItems.slice(0, 5).forEach(function (c) {
+        if (!c || typeof c !== "object") return;
+        const li = document.createElement("li");
+        const amt =
+          c.amount == null || c.amount === ""
+            ? "—"
+            : typeof c.amount === "number"
+              ? "$" + c.amount.toLocaleString("en-US", { maximumFractionDigits: 2 })
+              : String(c.amount);
+        li.textContent =
+          shortHash(c.claimHash || c.claimId) +
+          " · " +
+          String(c.payer || "unknown") +
+          " · " +
+          String(c.serviceDate || "—") +
+          " · " +
+          amt +
+          " · " +
+          String(c.status || "—");
+        ul.appendChild(li);
+      });
+      body.appendChild(ul);
+    }
+
+    const ph = shortHash(data.patientHash || (fallback && fallback.patientHash)).replace(/^#/, "");
+    const actions = document.createElement("div");
+    actions.className = "wk-dossier-actions";
+    const halLink = document.createElement("a");
+    halLink.className = "btn-quiet";
+    halLink.href =
+      "/nr2-optical-page-hal.html?patientHash=" +
+      encodeURIComponent(ph) +
+      "&patientId=" +
+      encodeURIComponent(String((fallback && fallback.patientId) || ""));
+    halLink.textContent = "Ask HAL about this patient →";
+    actions.appendChild(halLink);
+    body.appendChild(actions);
   }
 
   async function openPatientContext(slot) {

@@ -8558,11 +8558,19 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
                     status=403,
                 )
             mini = get_patient_dossier_mini(patient_id)
+            try:
+                from om_patient_dossier import get_claims_review_detail
+
+                claims = get_claims_review_detail(patient_id, limit=5)
+                if isinstance(claims, dict):
+                    mini["claims"] = claims
+            except Exception as claims_exc:  # noqa: BLE001
+                mini["claims"] = {"ok": False, "items": [], "error": str(claims_exc)}
             log_hal_patient_action(
                 user_id=current_role(),
                 patient_hash=patient_hash(patient_id),
                 action="query_summary",
-                tools_used='["get_patient_dossier_mini"]',
+                tools_used='["get_patient_dossier_mini","get_claims_review_detail"]',
             )
             mini["buildId"] = BUILD_ID
             return json_response_fn(mini)
