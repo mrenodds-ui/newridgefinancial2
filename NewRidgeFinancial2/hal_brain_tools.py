@@ -772,8 +772,9 @@ def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int
         except SoftDentExcelDisabledError as exc:
             # SoftDent Excel greyed out — Print Preview only (never File).
             preview = open_report_print_preview(rid, start=start, end=end)
+            preview_ok = bool(preview.get("ok")) and bool(preview.get("printPreviewOpen"))
             return {
-                "ok": bool(preview.get("ok")),
+                "ok": preview_ok,
                 "consentRequired": False,
                 "autonomous": True,
                 "reportId": rid,
@@ -790,7 +791,14 @@ def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int
                 "pathHygiene": "Excel disabled on SoftDent Output Options — Print Preview only (never File).",
                 "emptyNotZero": True,
                 "ensure": ensure,
-                "detail": str(exc)[:400],
+                "error": None if preview_ok else "print_preview_failed",
+                "detail": (
+                    str(exc)[:400]
+                    if preview_ok
+                    else (
+                        f"{exc}; preview: {preview.get('error') or preview.get('nextStep')}"
+                    )[:600]
+                ),
                 "at": _utc_now(),
             }
         file_size = 0

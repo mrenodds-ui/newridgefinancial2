@@ -1472,22 +1472,7 @@ def _complete_output_setup_and_save(
     for _ in range(50):
         cancel_printer_dialogs(max_rounds=2)
         dismiss_softdent_alerts(max_rounds=2)
-        setup = find_dialog("Report Setup")
-        if not setup:
-            # SoftDent titles vary: "Collection Summary Report Setup", "Register Setup", …
-            pids = _softdent_pids()
-            for w in _desktop_dialogs():
-                try:
-                    t = (w.window_text() or "").strip()
-                    if not t or "softdent software" in t.lower():
-                        continue
-                    if pids and _window_pid(int(w.handle)) not in pids:
-                        continue
-                    if "setup" in t.lower() or "aging" in t.lower():
-                        setup = w
-                        break
-                except Exception:
-                    continue
+        setup = _find_softdent_report_setup_dialog()
         if setup:
             break
         # Aging sometimes skips Report Setup and opens Excel / Select File Name directly.
@@ -1495,38 +1480,11 @@ def _complete_output_setup_and_save(
             break
         time.sleep(0.25)
     if setup:
-        _keyboard_activate_dialog(setup)
-        mode = str(date_mode or "range").strip().lower()
-        h = int(setup.handle)
-        if mode == "as_of":
-            # Account Aging: typically one As-Of date + provider (not start/end range).
-            as_of_txt = end.strftime("%m/%d/%y")
-            _send_softdent_keys("{TAB}", hwnd=h)
-            time.sleep(0.1)
-            _type_keys_clear_and_text(as_of_txt, hwnd=h)
-            _send_softdent_keys("{TAB}", hwnd=h)
-            time.sleep(0.1)
-            _type_keys_clear_and_text("999", hwnd=h)
-        else:
-            start_txt = start.strftime("%m/%d/%y")
-            end_txt = end.strftime("%m/%d/%y")
-            # SoftDent Report Setup edits: Tab from first field → start → end → provider
-            _send_softdent_keys("{TAB}", hwnd=h)
-            time.sleep(0.1)
-            _type_keys_clear_and_text(start_txt, hwnd=h)
-            _send_softdent_keys("{TAB}", hwnd=h)
-            time.sleep(0.1)
-            _type_keys_clear_and_text(end_txt, hwnd=h)
-            _send_softdent_keys("{TAB}", hwnd=h)
-            time.sleep(0.1)
-            _type_keys_clear_and_text("999", hwnd=h)  # all providers
-        time.sleep(0.15)
-        _keyboard_press_ok(hwnd=h)
-        time.sleep(1.0)
-        cancel_printer_dialogs()
-        dismiss_softdent_alerts()
+        _fill_softdent_report_setup(
+            setup, start=start, end=end, date_mode=str(date_mode or "range")
+        )
     elif not (_excel_sdwin_workbook_open() or find_dialog("Select File Name")):
-        raise RuntimeError("Report Setup dialog did not appear")
+        raise RuntimeError("Report Setup / Date Wizard dialog did not appear")
 
     save = None
     for _ in range(90):
@@ -1957,11 +1915,13 @@ def softdent_report_preview_visible(titles: list[str] | None = None) -> bool:
     titles = titles if titles is not None else list_softdent_window_titles()
     for t in titles:
         low = t.lower()
-        if "sorting" in low:
+        if "sorting" in low or "date wizard" in low or "output options" in low:
             continue
         if "preview" in low:
             return True
         # MDI: "CS SoftDent Software v19.1.4 - [INSURANCE INCOME REPORT]"
+        if "[" in t and "]" in t and "softdent software" in low:
+            return True
         if "[" in t and "report" in low:
             return True
         if any(
@@ -1973,10 +1933,92 @@ def softdent_report_preview_visible(titles: list[str] | None = None) -> bool:
                 "payment distribution",
                 "writeoff",
                 "write-off",
+                "account aging",
+                "collection summary",
+                "collection report",
+                "register for a period",
+                "period register",
+                "daysheet",
             )
         ):
             return True
     return False
+
+
+def _find_softdent_report_setup_dialog():
+    """Locate SoftDent Report Setup / Date Wizard / named setup dialogs.
+
+    Aging often titles the dialog **Date Wizard** (not Report Setup). Never File.
+    """
+    for title in ("Report Setup", "Date Wizard", "Account Aging", "Register Setup"):
+        dlg = find_dialog(title)
+        if dlg:
+            return dlg
+    pids = _softdent_pids()
+    for w in _desktop_dialogs():
+        try:
+            t = (w.window_text() or "").strip()
+            if not t:
+                continue
+            low = t.lower()
+            if "softdent software" in low or "output options" in low:
+                continue
+            if pids and _window_pid(int(w.handle)) not in pids:
+                continue
+            if any(
+                key in low
+                for key in (
+                    "setup",
+                    "wizard",
+                    "aging",
+                    "register",
+                    "collection",
+                    "for a period",
+                    "daysheet",
+                )
+            ):
+                return w
+        except Exception:
+            continue
+    return None
+
+
+def _fill_softdent_report_setup(
+    setup,
+    *,
+    start: date,
+    end: date,
+    date_mode: str = "range",
+) -> None:
+    """Fill SoftDent Report Setup / Date Wizard and OK into preview or Excel."""
+    _keyboard_activate_dialog(setup)
+    h = int(setup.handle)
+    mode = str(date_mode or "range").strip().lower()
+    if mode == "as_of":
+        as_of_txt = end.strftime("%m/%d/%y")
+        _send_softdent_keys("{TAB}", hwnd=h)
+        time.sleep(0.1)
+        _type_keys_clear_and_text(as_of_txt, hwnd=h)
+        _send_softdent_keys("{TAB}", hwnd=h)
+        time.sleep(0.1)
+        _type_keys_clear_and_text("999", hwnd=h)
+    else:
+        start_txt = start.strftime("%m/%d/%y")
+        end_txt = end.strftime("%m/%d/%y")
+        _send_softdent_keys("{TAB}", hwnd=h)
+        time.sleep(0.1)
+        _type_keys_clear_and_text(start_txt, hwnd=h)
+        _send_softdent_keys("{TAB}", hwnd=h)
+        time.sleep(0.1)
+        _type_keys_clear_and_text(end_txt, hwnd=h)
+        _send_softdent_keys("{TAB}", hwnd=h)
+        time.sleep(0.1)
+        _type_keys_clear_and_text("999", hwnd=h)
+    time.sleep(0.15)
+    _keyboard_press_ok(hwnd=h)
+    time.sleep(1.2)
+    cancel_printer_dialogs()
+    dismiss_softdent_alerts()
 
 
 def open_report_print_preview(
@@ -1993,7 +2035,7 @@ def open_report_print_preview(
     Output Options: click **Print Preview** prompt, then Enter (same pattern as Excel).
     After SoftDent shows the preview, page through with Next/PageDown (detail often
     spans pages), then go to the **last page** for exact totals.
-    Never invent dollars from page 1 alone. Never use Printer.
+    Never invent dollars from page 1 alone. Never use Printer. Never File.
     Some reports (Insurance Income / writeoff) have Excel unavailable.
     """
     catalog = load_menu_map()
@@ -2001,9 +2043,14 @@ def open_report_print_preview(
     if not isinstance(report, dict):
         raise KeyError(f"Unknown SoftDent GUI report id: {report_id}")
     keys = resolve_menu_keys(report, menu_keys)
-    # Practice Management insurance reports: prefer win32 path (not Accounting F10 r a)
+    date_mode = str(report.get("date_mode") or "range").strip().lower()
+    # Practice Management + collections: prefer win32 path (not Accounting F10 r a)
     opened = False
     win32_paths: dict[str, list[str]] = {
+        "collections": [
+            "Reports->Practice Management->Collection Reports->Summary",
+            "Reports->Practice Management->Collection Reports->Reconciliation",
+        ],
         "insurance_payment_analysis": [
             "Reports->Practice Management->Insurance Reports->Insurance Income",
             "Reports->Practice Management->Insurance Reports->Contractual Plan Analysis",
@@ -2022,72 +2069,74 @@ def open_report_print_preview(
     if not opened:
         _open_accounting_report(report_id, keys)
     _select_output_option_prompt("print_preview")
-    # Setup if it appears — fill dates then OK into preview
+    # Setup / Date Wizard — fill dates then OK into preview (never File).
     setup = None
-    for _ in range(40):
+    for _ in range(50):
         cancel_printer_dialogs(max_rounds=2)
-        from pywinauto import Desktop
-
-        pids = _softdent_pids()
-        for w in Desktop(backend="win32").windows():
-            try:
-                t = (w.window_text() or "").strip()
-                if pids and _window_pid(int(w.handle)) not in pids:
-                    continue
-                if "setup" in t.lower() and "softdent software" not in t.lower():
-                    setup = w
-                    break
-            except Exception:
-                continue
+        dismiss_softdent_alerts(max_rounds=1)
+        setup = _find_softdent_report_setup_dialog()
         if setup or find_dialog("Print Preview") or softdent_report_preview_visible():
             break
         time.sleep(0.25)
     if setup:
-        _keyboard_activate_dialog(setup)
-        h = int(setup.handle)
-        start_txt = start.strftime("%m/%d/%y")
-        end_txt = end.strftime("%m/%d/%y")
-        _send_softdent_keys("{TAB}", hwnd=h)
-        time.sleep(0.1)
-        _type_keys_clear_and_text(start_txt, hwnd=h)
-        _send_softdent_keys("{TAB}", hwnd=h)
-        time.sleep(0.1)
-        _type_keys_clear_and_text(end_txt, hwnd=h)
-        _send_softdent_keys("{TAB}", hwnd=h)
-        time.sleep(0.1)
-        _type_keys_clear_and_text("999", hwnd=h)
-        time.sleep(0.15)
-        _keyboard_press_ok(hwnd=h)
-        time.sleep(1.2)
-        cancel_printer_dialogs()
+        _fill_softdent_report_setup(setup, start=start, end=end, date_mode=date_mode)
 
-    # Wait out SoftDent "Sorting Report" splash
-    for _ in range(60):
+    # Wait out SoftDent "Sorting Report" splash + late Date Wizard
+    for _ in range(80):
+        cancel_printer_dialogs(max_rounds=1)
         titles = list_softdent_window_titles()
         if any("sorting" in t.lower() for t in titles):
             time.sleep(0.5)
             continue
-        break
+        leftover = _find_softdent_report_setup_dialog()
+        if leftover and not softdent_report_preview_visible(titles):
+            _fill_softdent_report_setup(
+                leftover, start=start, end=end, date_mode=date_mode
+            )
+            time.sleep(0.6)
+            continue
+        if softdent_report_preview_visible(titles) or find_dialog("Print Preview"):
+            break
+        time.sleep(0.25)
 
     titles = list_softdent_window_titles()
-    preview = softdent_report_preview_visible(titles)
+    preview = softdent_report_preview_visible(titles) or bool(find_dialog("Print Preview"))
     nav: dict[str, Any] | None = None
     if preview and page_through:
         nav = navigate_softdent_print_preview_pages(max_next_pages=max_next_pages)
         titles = list_softdent_window_titles()
         preview = softdent_report_preview_visible(titles) or preview
 
+    stuck_setup = _find_softdent_report_setup_dialog() is not None
+    ok = bool(preview) and not stuck_setup
     return {
-        "ok": True,
+        "ok": ok,
         "reportId": report_id,
         "outputMode": "print_preview",
         "printPreviewOpen": preview,
+        "setupStuck": stuck_setup,
+        "dateMode": date_mode,
         "titles": titles[:12],
         "pageNavigation": nav,
+        "moneyBeamIngest": False,
+        "emptyNotZero": True,
+        "error": None
+        if ok
+        else (
+            "print_preview_not_open"
+            if not preview
+            else "setup_dialog_still_open"
+        ),
         "nextStep": (
-            "SoftDent Print Preview / MDI report is open (or pending). "
+            "SoftDent Print Preview / MDI report is open. "
             "Page through with Next/PageDown for detail; LAST page for exact totals. "
-            "Do not invent dollars from page 1 alone."
+            "Do not invent dollars from page 1 alone. Money beams need Excel enabled."
+            if ok
+            else (
+                "Print Preview did not open (Date Wizard/Setup may still be open, or "
+                "Practice Management F10 missed). Retry with SoftDent focused; never File. "
+                "empty ≠ $0 — no invented dollars."
+            )
         ),
     }
 
@@ -2109,7 +2158,7 @@ def export_collections_for_period(
     dest_root: Path | None = None,
     menu_keys: str | None = None,
 ) -> Path:
-    """Reports → Accounting → Collections (keys configurable)."""
+    """Reports → Practice Management → Collection Reports → Summary."""
     return export_report_by_id(
         "collections",
         start=start,

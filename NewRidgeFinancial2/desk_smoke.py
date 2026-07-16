@@ -510,15 +510,61 @@ def run_desk_smoke(
         row_time_covered = False
 
     # Morning confidence: GREEN+MATCH is healthy; period Force Close stays laser-gated.
+    # Trellis withBenefits is informational only (no $) — does not fail smoke / Force Close.
+    trellis_benefits: dict[str, Any] = {
+        "ok": False,
+        "hasReport": False,
+        "patients": None,
+        "withBenefits": None,
+        "statusOnly": None,
+        "targetDate": None,
+        "note": "counts only · empty ≠ $0 · board PHI stays initials+hash",
+    }
+    try:
+        from datetime import date as _date
+        from datetime import timedelta as _timedelta
+
+        from nr2_trellis_nightly import eligibility_report_snapshot
+
+        # Prefer tomorrow (Mon–Thu huddle target); fall back to today.
+        today = _date.today()
+        for offset in (1, 0, 2, 3):
+            day = today + _timedelta(days=offset)
+            if day.weekday() >= 5:  # skip Sat/Sun
+                continue
+            snap = eligibility_report_snapshot(target_date=day.isoformat())
+            if isinstance(snap, dict) and snap.get("hasReport"):
+                trellis_benefits = {
+                    "ok": True,
+                    "hasReport": True,
+                    "patients": snap.get("patients"),
+                    "withBenefits": snap.get("withBenefits"),
+                    "statusOnly": snap.get("statusOnly"),
+                    "targetDate": snap.get("targetDate") or day.isoformat(),
+                    "reportUrl": snap.get("reportUrl"),
+                    "note": "counts only · empty ≠ $0 · board PHI stays initials+hash",
+                }
+                break
+            if isinstance(snap, dict) and trellis_benefits.get("targetDate") is None:
+                trellis_benefits["targetDate"] = snap.get("targetDate") or day.isoformat()
+                trellis_benefits["patients"] = snap.get("patients")
+                trellis_benefits["withBenefits"] = snap.get("withBenefits")
+                trellis_benefits["statusOnly"] = snap.get("statusOnly")
+                trellis_benefits["ok"] = bool(snap.get("ok"))
+    except Exception as exc:  # noqa: BLE001
+        trellis_benefits["error"] = str(exc)[:200]
+
     morning_confidence = {
         "deskProof": proof_status,
         "status": "GREEN" if len(failures) == 0 else "RED",
         "forceCloseAvailable": bool(fc_available),
         "patientAttestEligible": patient_attest_eligible,
         "forceCloseLaserGated": True,
+        "trellisBenefits": trellis_benefits,
         "note": (
             "GREEN + MATCH does not enable period Force Close; "
-            "use patientAttestEligible for MATCH-gated patient ATTEST REVIEW."
+            "use patientAttestEligible for MATCH-gated patient ATTEST REVIEW. "
+            "trellisBenefits is informational (withBenefits counts, no $)."
         ),
     }
     checks.append(

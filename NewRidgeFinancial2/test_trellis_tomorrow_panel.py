@@ -76,8 +76,27 @@ class TomorrowInsuranceSnapshotTests(unittest.TestCase):
                 "<!DOCTYPE html><html><body><h1>Trellis</h1><p>empty ≠ $0</p></body></html>",
                 encoding="utf-8",
             )
+            results = {
+                "results": [
+                    {
+                        "benefits": {
+                            "scrapeOk": True,
+                            "deductibleRemaining": None,
+                            "categories": {"preventive": "100%"},
+                        }
+                    },
+                    {"benefits": {"scrapeOk": False}},
+                    {"verifyStatus": "Eligible"},
+                ]
+            }
+            (root / "tomorrow_trellis_verify_results_2026-07-20.json").write_text(
+                json.dumps(results), encoding="utf-8"
+            )
             meta = eligibility_report_snapshot(target_date="2026-07-20", out_dir=root)
             self.assertTrue(meta.get("hasReport"))
+            self.assertEqual(meta.get("patients"), 3)
+            self.assertEqual(meta.get("withBenefits"), 1)
+            self.assertEqual(meta.get("statusOnly"), 2)
             self.assertIn("eligibility-report.html", str(meta.get("reportUrl") or ""))
             doc = eligibility_report_html(target_date="2026-07-20", out_dir=root)
             self.assertTrue(doc.get("hasReport"))

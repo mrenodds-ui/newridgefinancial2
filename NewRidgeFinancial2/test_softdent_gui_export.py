@@ -55,13 +55,32 @@ class SoftDentGuiExportTests(unittest.TestCase):
                 ["CS SoftDent Software v19.1.4 - [INSURANCE INCOME REPORT]"]
             )
         )
+        self.assertTrue(
+            softdent_report_preview_visible(
+                ["CS SoftDent Software v19.1.4 - [ACCOUNT AGING]"]
+            )
+        )
+        self.assertTrue(
+            softdent_report_preview_visible(
+                ["CS SoftDent Software v19.1.4 - [COLLECTION SUMMARY]"]
+            )
+        )
         self.assertFalse(softdent_report_preview_visible(["Sorting Report"]))
+        self.assertFalse(softdent_report_preview_visible(["Date Wizard"]))
         self.assertFalse(softdent_report_preview_visible(["CS SoftDent Software v19.1.4"]))
         note = (load_menu_map().get("notes") or [])[4]
         self.assertIn("PageDown", note)
         ipa = load_menu_map()["reports"]["insurance_payment_analysis"]
         self.assertEqual(ipa.get("outputMode"), "print_preview_only")
         self.assertFalse(ipa.get("excelExport"))
+        collections = load_menu_map()["reports"]["collections"]
+        self.assertIn("Practice Management", str(collections.get("menuPath") or ""))
+
+    def test_preview_setup_helpers_find_date_wizard(self):
+        from softdent_gui_export import _fill_softdent_report_setup, _find_softdent_report_setup_dialog
+
+        self.assertTrue(callable(_find_softdent_report_setup_dialog))
+        self.assertTrue(callable(_fill_softdent_report_setup))
 
     def test_run_safe_period_exports_never_returns_password(self):
         with mock.patch(
