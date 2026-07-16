@@ -132,6 +132,79 @@
       body.appendChild(note);
     }
 
+    const notes = Array.isArray(data.clinicalNotes) ? data.clinicalNotes : [];
+    const notesHead = document.createElement("h4");
+    notesHead.className = "wk-dossier-sub";
+    notesHead.textContent = "Clinical notes";
+    body.appendChild(notesHead);
+    if (!notes.length) {
+      const empty = document.createElement("p");
+      empty.className = "wk-dossier-muted";
+      empty.textContent = data.hasClinicalNotes
+        ? "Notes flagged but no summary text."
+        : "No clinical note summaries for this patient.";
+      body.appendChild(empty);
+    } else {
+      const ul = document.createElement("ul");
+      ul.className = "wk-claim-list";
+      notes.slice(0, 3).forEach(function (n) {
+        if (!n || typeof n !== "object") return;
+        const li = document.createElement("li");
+        li.textContent =
+          String(n.station || "clinical") +
+          " · " +
+          String(n.summary || "—").slice(0, 180);
+        ul.appendChild(li);
+      });
+      body.appendChild(ul);
+    }
+
+    const estimates = Array.isArray(data.treatmentEstimates)
+      ? data.treatmentEstimates
+      : [];
+    const estHead = document.createElement("h4");
+    estHead.className = "wk-dossier-sub";
+    estHead.textContent = "Treatment estimates";
+    body.appendChild(estHead);
+    if (!estimates.length) {
+      const empty = document.createElement("p");
+      empty.className = "wk-dossier-muted";
+      empty.textContent = "No treatment estimates — empty ≠ $0.";
+      body.appendChild(empty);
+    } else {
+      const ul = document.createElement("ul");
+      ul.className = "wk-claim-list";
+      estimates.slice(0, 4).forEach(function (e) {
+        if (!e || typeof e !== "object") return;
+        const li = document.createElement("li");
+        const disp =
+          e.display != null
+            ? String(e.display)
+            : e.estimate == null || e.estimate === ""
+              ? "—"
+              : "$" + Number(e.estimate).toLocaleString("en-US", { maximumFractionDigits: 2 });
+        const bit =
+          String(e.ada || "—") +
+          (e.payer ? " · " + String(e.payer) : "") +
+          " · " +
+          disp;
+        li.textContent = e.sufficient
+          ? bit
+          : bit + (e.reason ? " · " + String(e.reason).slice(0, 80) : " · unknown");
+        ul.appendChild(li);
+      });
+      body.appendChild(ul);
+      const honesty = estimates.find(function (e) {
+        return e && e.honesty;
+      });
+      if (honesty && honesty.honesty) {
+        const h = document.createElement("p");
+        h.className = "wk-dossier-muted";
+        h.textContent = String(honesty.honesty);
+        body.appendChild(h);
+      }
+    }
+
     const claims = data.claims && typeof data.claims === "object" ? data.claims : null;
     const claimItems = claims && Array.isArray(claims.items) ? claims.items : [];
     const claimsHead = document.createElement("h4");

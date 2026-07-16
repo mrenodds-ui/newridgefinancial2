@@ -67,6 +67,7 @@ def get_patient_dossier_mini(patient_id: str) -> dict[str, Any]:
                 primary_carrier = ins[0]
 
         open_claims = 0
+        payer_hint = str(primary_carrier or "").strip()
         if _table_exists(conn, "sd_claims") and patient_name:
             cur.execute(
                 """
@@ -77,15 +78,141 @@ def get_patient_dossier_mini(patient_id: str) -> dict[str, Any]:
                 (patient_name,),
             )
             open_claims = int(cur.fetchone()[0] or 0)
+            if not payer_hint:
+                cur.execute(
+                    """
+                    SELECT payer FROM sd_claims
+                    WHERE patient_name=? AND COALESCE(payer,'')!=''
+                    ORDER BY service_date DESC LIMIT 1
+                    """,
+                    (patient_name,),
+                )
+                prow = cur.fetchone()
+                if prow:
+                    payer_hint = str(prow[0] or "").strip()
+                    if not primary_carrier:
+                        primary_carrier = payer_hint
 
+        clinical_notes: list[dict[str, Any]] = []
         has_notes = False
         try:
             from nr2_clinical_bridge import load_clinical_context
 
-            ctx = load_clinical_context(None, patient_id=pid, patient_name=patient_name, limit=1)
-            has_notes = bool(ctx.get("items"))
+            ctx = load_clinical_context(None, patient_id=pid, patient_name=patient_name, limit=3)
+            for item in (ctx.get("items") or [])[:3]:
+                if not isinstance(item, dict):
+                    continue
+                summary = str(item.get("summary") or item.get("text") or "").strip()
+                if not summary:
+                    continue
+                # PHI-safe display: truncate; never put full patient name in OM board text
+                if patient_name and patient_name.lower() in summary.lower():
+                    summary = summary.replace(patient_name, "Patient")
+                    summary = summary.replace(patient_name.upper(), "Patient")
+                    summary = summary.replace(patient_name.title(), "Patient")
+                station = str(item.get("station") or "").strip()
+                station_disp = station[:24] if station else "clinical"
+                clinical_notes.append(
+                    {
+                        "summary": summary[:220],
+                        "source": str(item.get("source") or "clinical")[:40],
+                        "station": station_disp,
+                        "readOnly": True,
+                    }
+                )
+            has_notes = bool(clinical_notes)
         except Exception:
             has_notes = False
+
+        treatment_estimates: list[dict[str, Any]] = []
+        recent_adas: list[str] = []
+        if _table_exists(conn, "sd_procedures"):
+            cur.execute(
+                """
+                SELECT ada_code FROM sd_procedures
+                WHERE patient_id=? AND COALESCE(ada_code,'')!=''
+                ORDER BY proc_date DESC LIMIT 8
+                """,
+                (pid,),
+            )
+            seen_ada: set[str] = set()
+            for row in cur.fetchall():
+                ada = str(row[0] or "").strip().upper()
+                if not ada or ada in seen_ada:
+                    continue
+                seen_ada.add(ada)
+                recent_adas.append(ada)
+                if len(recent_adas) >= 4:
+                    break
+
+        if recent_adas:
+            try:
+                from softdent_treatment_planning import lookup_treatment_estimate
+
+                for ada in recent_adas:
+                    if not payer_hint:
+                        treatment_estimates.append(
+                            {
+                                "ada": ada,
+                                "payer": None,
+                                "estimate": None,
+                                "display": "—",
+                                "reason": "No payer on file for estimate lookup",
+                                "sufficient": False,
+                            }
+                        )
+                        continue
+                    est = lookup_treatment_estimate(payer=payer_hint, ada_code=ada)
+                    raw = est.get("estimate") if isinstance(est, dict) else None
+                    amt = None
+                    if isinstance(raw, dict):
+                        amt = raw.get("paidAmountAvg")
+                        if amt is None:
+                            amt = raw.get("allowedAmountAvg")
+                    elif isinstance(raw, (int, float)):
+                        amt = raw
+                    money = _safe_money(amt)
+                    enough = bool(est.get("found") and est.get("sufficient") and money is not None)
+                    treatment_estimates.append(
+                        {
+                            "ada": ada,
+                            "payer": payer_hint,
+                            "estimate": money,
+                            "display": (
+                                f"${money:,.2f}" if isinstance(money, (int, float)) else "—"
+                            ),
+                            "sampleSize": est.get("sampleSize"),
+                            "sufficient": enough,
+                            "reason": None
+                            if enough
+                            else (
+                                est.get("message")
+                                or "Insufficient sample or no estimate — empty ≠ $0"
+                            ),
+                            "honesty": est.get("honesty")
+                            or "Historical SoftDent payment lines only — not a benefit guarantee.",
+                        }
+                    )
+            except Exception as exc:  # noqa: BLE001
+                treatment_estimates.append(
+                    {
+                        "ada": "—",
+                        "estimate": None,
+                        "display": "—",
+                        "sufficient": False,
+                        "reason": f"Estimate lookup unavailable: {exc}",
+                    }
+                )
+        else:
+            treatment_estimates.append(
+                {
+                    "ada": "—",
+                    "estimate": None,
+                    "display": "—",
+                    "sufficient": False,
+                    "reason": "No SoftDent procedures/ADA codes on file for estimates",
+                }
+            )
 
         # Account balance — SoftDent extract has no AR balance column; honest unknown
         account_balance = "unavailable"
@@ -102,6 +229,8 @@ def get_patient_dossier_mini(patient_id: str) -> dict[str, Any]:
             "lastVisit": last_visit or "unknown",
             "accountBalance": account_balance,
             "hasClinicalNotes": has_notes,
+            "clinicalNotes": clinical_notes,
+            "treatmentEstimates": treatment_estimates,
             "readOnly": True,
         }
     finally:
