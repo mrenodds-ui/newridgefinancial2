@@ -9,7 +9,7 @@ CARRIER_MAP = {
     "DELTA DENTAL OF KS": "Delta Dental of Kansas",
     "DELTA DENTAL OF IN": "Delta Dental of Indiana",
     "DELTA DENTAL OF PA": "Delta Dental of Pennsylvania",
-    "BCBS OF KS": "Blue Cross and Blue Shield of Kansas",
+    "BCBS OF KS": "Blue Cross Blue Shield of Kansas",
     "METLIFE DENTAL": "MetLife",
     "CIGNA DENTAL": "Cigna",
     "CIGNA DENTAL - HMO": "Cigna",
