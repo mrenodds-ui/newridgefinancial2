@@ -148,29 +148,44 @@ def run_verify_batch(target: date, *, timeout_sec: int = 7200) -> dict[str, Any]
         return {"ok": False, "error": "missing_batch_script", "path": str(script)}
     env = os.environ.copy()
     env["NR2_TRELLIS_TARGET_DATE"] = _iso(target)
+    env.setdefault("PYTHONUNBUFFERED", "1")
     # Prefer repo venv playwright
     py = REPO_ROOT / ".venv" / "Scripts" / "python.exe"
     if not py.is_file():
         py = Path(sys.executable)
+    log_path = OUT_DIR / f"trellis_verify_batch_{_iso(target)}.log"
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        proc = subprocess.run(
-            [str(py), str(script)],
-            cwd=str(REPO_ROOT),
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=timeout_sec,
-            check=False,
-        )
+        with log_path.open("w", encoding="utf-8") as log_fp:
+            proc = subprocess.run(
+                [str(py), "-u", str(script)],
+                cwd=str(REPO_ROOT),
+                env=env,
+                stdout=log_fp,
+                stderr=subprocess.STDOUT,
+                timeout=timeout_sec,
+                check=False,
+            )
     except subprocess.TimeoutExpired:
-        return {"ok": False, "error": "verify_timeout", "timeoutSec": timeout_sec}
+        return {
+            "ok": False,
+            "error": "verify_timeout",
+            "timeoutSec": timeout_sec,
+            "log": str(log_path),
+        }
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": "verify_spawn_failed", "detail": str(exc)[:400]}
+    tail = ""
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+        tail = text[-2000:]
+    except Exception:
+        pass
     return {
         "ok": proc.returncode == 0,
         "returncode": proc.returncode,
-        "stdoutTail": (proc.stdout or "")[-2000:],
-        "stderrTail": (proc.stderr or "")[-2000:],
+        "log": str(log_path),
+        "stdoutTail": tail,
     }
 
 

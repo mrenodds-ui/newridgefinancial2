@@ -7,7 +7,7 @@ Night-before SoftDent schedule → Vyne Trellis **Add Patient → Verify** for t
 | Lane | When | What |
 |------|------|------|
 | APScheduler `nr2-trellis-verify` | Mon–Thu **22:00** local (while NR2 runs) | Build worklist + pending; upsert HAL work item |
-| Windows Task Scheduler | Mon–Thu **10:00 PM** interactive | Same + headed Playwright Verify (`--verify`) |
+| Windows Task Scheduler | Mon–Thu **10:10 PM** interactive | Headed Playwright Verify (`--verify`) after worklist |
 
 Thu night targets **Monday** (skips Fri–Sun). Mon–Wed nights target the next calendar day.
 
@@ -37,6 +37,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_trellis_nigh
 
 ## Outputs
 `app_data/nr2/vyne_pulls/tomorrow_trellis_{add_worklist,pending_batch,verify_results}_YYYY-MM-DD.json`
+
+Batch log (streamed): `app_data/nr2/vyne_pulls/trellis_verify_batch_YYYY-MM-DD.log`
 
 ## HAL chat
 Ask: “nightly Trellis verify” / “10pm insurance verification” → `policy:trellis-nightly-verify`.

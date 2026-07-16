@@ -1,4 +1,5 @@
-# Install HAL nightly Trellis dental eligibility verify - Mon-Thu 10:00 PM interactive.
+# Install HAL nightly Trellis dental eligibility verify - Mon-Thu 10:10 PM interactive.
+# Runs AFTER APScheduler 10:00 PM worklist build (job nr2-trellis-verify).
 # Playwright needs a logged-on desktop (same pattern as SoftDent 5pm GUI pull).
 $ErrorActionPreference = 'Stop'
 
@@ -23,13 +24,13 @@ if (!(Test-Path -LiteralPath $EnvLocal)) {
     Write-Warning "Missing .env.vyne.local - create VYNE_AUTOMATION_USERNAME / PASSWORD (Wichita) before first run."
 }
 
+# Stagger to 10:10 PM so NR2 APScheduler can finish the SoftDent worklist at 10:00.
 $action = New-ScheduledTaskAction `
     -Execute $Py `
     -Argument "`"$Script`" --force --verify" `
     -WorkingDirectory $RepoRoot
 
-# Mon-Thu 10:00 PM
-$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday -At '10:00PM'
+$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday -At '10:10PM'
 
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
@@ -44,7 +45,6 @@ $settings = New-ScheduledTaskSettingsSet `
 $principal = New-ScheduledTaskPrincipal -UserId $CurrentUser -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
 
-Write-Host "Installed '$TaskName' (Interactive / Mon-Thu 10:00 PM) for $CurrentUser."
-Write-Host "Requirement: user logged on at 10 PM; SoftDent SQLite + Sensei Reference present."
-Write-Host "Env: .env.vyne.local Wichita password; --verify drives Trellis UI."
-Write-Host "APScheduler job nr2-trellis-verify also builds worklist when NR2 is running."
+Write-Host "Installed '$TaskName' (Interactive / Mon-Thu 10:10 PM) for $CurrentUser."
+Write-Host "APScheduler nr2-trellis-verify builds worklist at 10:00 PM; this task Verifies at 10:10 PM."
+Write-Host "Requirement: user logged on; SoftDent SQLite + Sensei Reference + .env.vyne.local (Wichita)."

@@ -129,20 +129,37 @@ def _remaining() -> list[dict]:
     return out
 
 
+def _blur_selects(page) -> None:
+    """Defocus Ant selects by clicking a plain textbox — never Escape (clears values)."""
+    try:
+        page.get_by_role("textbox", name="Subscriber ID").click(timeout=2000)
+        page.wait_for_timeout(150)
+    except Exception:
+        page.mouse.click(20, 20)
+        page.wait_for_timeout(150)
+
+
 def _select_ant(page, combobox_locator, option_text: str, type_text: str | None = None) -> None:
-    # Ant Design span.ant-select-selection-item intercepts the search input — click wrapper.
+    if not option_text:
+        raise RuntimeError("empty ant-select option_text")
+    _blur_selects(page)
     wrapper = combobox_locator.locator("xpath=ancestor::*[contains(@class,'ant-select')][1]")
-    if wrapper.count():
-        wrapper.first.click(force=True)
-    else:
-        combobox_locator.click(force=True)
-    page.wait_for_timeout(250)
+    target = wrapper.first if wrapper.count() else combobox_locator
+    target.click(force=True)
+    page.wait_for_timeout(300)
     if type_text is not None:
-        page.keyboard.press("Control+A")
-        page.keyboard.press("Backspace")
-        page.keyboard.type(type_text, delay=30)
-        page.wait_for_timeout(600)
-    # Prefer exact option in open dropdown
+        search = page.locator("input.ant-select-selection-search-input:visible")
+        if search.count():
+            search.last.click(force=True)
+            page.wait_for_timeout(100)
+            page.keyboard.press("Control+A")
+            page.keyboard.press("Backspace")
+            page.keyboard.type(type_text, delay=35)
+        else:
+            page.keyboard.press("Control+A")
+            page.keyboard.press("Backspace")
+            page.keyboard.type(type_text, delay=35)
+        page.wait_for_timeout(800)
     opt = page.locator(
         ".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option-content",
         has_text=re.compile(f"^{re.escape(option_text)}$"),
@@ -150,19 +167,13 @@ def _select_ant(page, combobox_locator, option_text: str, type_text: str | None 
     if opt.count() == 0:
         opt = page.locator(
             ".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option-content",
-            has_text=option_text,
+            has_text=re.compile(re.escape(option_text), re.I),
         )
     if opt.count() == 0:
-        opt = page.locator(".ant-select-item-option-content", has_text=re.compile(f"^{re.escape(option_text)}$"))
-    if opt.count() == 0:
-        # Keep dropdown open and pick first filtered hit via keyboard
-        page.keyboard.press("ArrowDown")
-        page.wait_for_timeout(150)
-        page.keyboard.press("Enter")
-        page.wait_for_timeout(250)
-        return
+        # Do not ArrowDown blindly — that picks wrong carriers (e.g. BCBS Alaska).
+        raise RuntimeError(f"carrier option not in open list: {option_text!r}")
     opt.first.click(force=True)
-    page.wait_for_timeout(250)
+    page.wait_for_timeout(300)
 
 
 def _return_to_eligibility_list(page) -> None:
@@ -198,6 +209,8 @@ def _fill_patient(page, rec: dict) -> None:
     page.get_by_role("textbox", name="Subscriber ID").fill(rec["subscriber_id"])
 
     gender = rec.get("gender") or "Female"
+    if gender not in {"Male", "Female", "Unknown"}:
+        gender = "Female"
     _select_ant(page, page.get_by_role("combobox", name="Gender").first, gender)
 
     if rec.get("is_self"):
@@ -205,10 +218,16 @@ def _fill_patient(page, rec: dict) -> None:
         if sw.get_attribute("aria-checked") != "true":
             sw.click(force=True)
             page.wait_for_timeout(200)
+        # Click a neutral label so Gender dropdown is not left open
+        page.get_by_role("textbox", name="Subscriber ID").click()
+        page.wait_for_timeout(150)
     else:
         sub = rec.get("subscriber") or {}
         if not sub.get("last") or not sub.get("dob"):
             raise RuntimeError(f"missing subscriber demo for {rec['patient_name']}: {sub}")
+        sub_gender = sub.get("gender") or "Male"
+        if sub_gender not in {"Male", "Female", "Unknown"}:
+            sub_gender = "Male"
         # Subscriber section = 2nd set of fields
         page.get_by_role("textbox", name="Last Name").nth(1).fill(sub["last"])
         page.get_by_role("textbox", name="First Name").nth(1).fill(sub["first"])
@@ -216,16 +235,49 @@ def _fill_patient(page, rec: dict) -> None:
         _select_ant(
             page,
             page.get_by_role("combobox", name="Gender").nth(1),
-            sub.get("gender") or "Male",
+            sub_gender,
         )
 
     carrier = rec["trellis_carrier"]
+    _blur_selects(page)
+    # Prefer a distinctive typeahead fragment (avoid "Blue Cross Blue Shield o…" matching Alaska).
+    type_frag = carrier
+    if "Kansas" in carrier:
+        type_frag = "Blue Cross Blue Shield of Kansas" if "Blue Cross" in carrier else carrier
+    elif "Colorado" in carrier:
+        type_frag = "Delta Dental of Colorado" if "Delta" in carrier else carrier
     _select_ant(
         page,
         page.get_by_role("combobox", name="Carrier"),
         carrier,
-        type_text=carrier,
+        type_text=type_frag,
     )
+    # Soft confirm: selection-item OR typed value visible in carrier control
+    wrap = page.get_by_role("combobox", name="Carrier").locator(
+        "xpath=ancestor::*[contains(@class,'ant-select')][1]"
+    )
+    chosen = ""
+    if wrap.count():
+        item = wrap.locator(".ant-select-selection-item")
+        if item.count():
+            chosen = (item.first.inner_text() or "").strip()
+        if not chosen:
+            inp = wrap.locator("input.ant-select-selection-search-input")
+            if inp.count():
+                chosen = (inp.first.input_value() or "").strip()
+    if not chosen:
+        # Last resort: carrier string appears in Insurance section
+        section = page.locator("text=Insurance").first.locator(
+            "xpath=ancestor::*[contains(@class,'ant-row') or contains(@class,'section') or self::div][1]"
+        )
+        try:
+            body = section.inner_text(timeout=2000)
+        except Exception:
+            body = page.locator("body").inner_text()[:4000]
+        if carrier.lower() not in body.lower() and carrier.split()[0].lower() not in body.lower():
+            raise RuntimeError(f"carrier not selected from list (wanted {carrier!r}, got {chosen!r})")
+        chosen = carrier
+    print("carrier_selected", chosen)
 
     page.get_by_role("button", name="Verify").click()
     # Wait for status modal / Eligible text
@@ -436,18 +488,35 @@ def main() -> int:
                         )
                     except Exception:
                         pass
+                    try:
+                        _append_result(
+                            {
+                                "patient_name": rec["patient_name"],
+                                "status": "Failed",
+                                "carrier_trellis": rec.get("trellis_carrier"),
+                                "carrier_id": "",
+                                "softdent_carrier": rec.get("softdent_carrier"),
+                                "subscriber_id": rec.get("subscriber_id"),
+                                "verified_at": datetime.now(timezone.utc).isoformat(),
+                                "notes": f"exception:{exc}"[:240],
+                                "plan_name": None,
+                                "effective_date": None,
+                            }
+                        )
+                    except Exception as append_exc:  # noqa: BLE001
+                        print("append_fail", append_exc)
                     # Try recover to list
                     try:
                         if page.get_by_role("button", name="Back").count():
-                            page.get_by_role("button", name="Back").click()
+                            page.get_by_role("button", name="Back").first.click(force=True)
                             page.wait_for_timeout(1000)
-                        else:
-                            page.goto(
-                                "https://app.vynetrellis.com/Eligibility",
-                                wait_until="domcontentloaded",
-                                timeout=60000,
-                            )
-                            page.wait_for_timeout(2000)
+                        page.goto(
+                            "https://app.vynetrellis.com/Eligibility",
+                            wait_until="domcontentloaded",
+                            timeout=60000,
+                        )
+                        page.wait_for_timeout(2000)
+                        _return_to_eligibility_list(page)
                     except Exception:
                         pass
         finally:

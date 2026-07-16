@@ -697,6 +697,43 @@ def eod_handoff_tick(store, *, force: bool = False) -> dict[str, Any]:
         return {"ok": True, "skipped": True, "reason": "human_shift_active"}
 
     handoff = compile_shift_handoff(store, employee_id="HAL")
+    # Append Mon–Thu Trellis next-day eligibility status into EOD markdown
+    try:
+        from nr2_trellis_nightly import next_clinical_day, should_run_tonight
+        from pathlib import Path
+        import json as _json
+
+        if should_run_tonight():
+            target = next_clinical_day()
+            trellis_lines = ["", "## Trellis next-day eligibility (Mon–Thu 10pm)"]
+            if target:
+                trellis_lines.append(f"- Next clinical day: {target.isoformat()}")
+                results_path = (
+                    Path(__file__).resolve().parents[1]
+                    / "app_data"
+                    / "nr2"
+                    / "vyne_pulls"
+                    / f"tomorrow_trellis_verify_results_{target.isoformat()}.json"
+                )
+                if results_path.is_file():
+                    data = _json.loads(results_path.read_text(encoding="utf-8"))
+                    rows = data.get("results") or []
+                    by: dict[str, int] = {}
+                    for r in rows:
+                        st = str(r.get("status") or "Unknown")
+                        by[st] = by.get(st, 0) + 1
+                    trellis_lines.append(f"- Results on file: {len(rows)} · {by}")
+                else:
+                    trellis_lines.append(
+                        "- Results not yet written — nightly job builds worklist at 10pm; "
+                        "headed Verify via Task Scheduler at 10:10pm."
+                    )
+            trellis_lines.append("- Ask HAL: nightly Trellis verify / insurance verification schedule")
+            md = str(handoff.get("reportMarkdown") or "")
+            handoff["reportMarkdown"] = md.rstrip() + "\n" + "\n".join(trellis_lines) + "\n"
+    except Exception:
+        pass
+
     handoff_id = f"handoff-eod-{uuid.uuid4().hex[:12]}"
     with store._connect() as conn:
         init_employee_workflow_schemas(conn)
