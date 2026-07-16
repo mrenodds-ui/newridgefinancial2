@@ -35,6 +35,7 @@ WORKLIST = OUT_DIR / f"tomorrow_trellis_add_worklist_{DATE}.json"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _trellis_carrier_map import CARRIER_MAP  # noqa: E402
+from trellis_clearcoverage_scrape import scrape_clearcoverage  # noqa: E402
 
 
 def _load_env() -> None:
@@ -301,11 +302,39 @@ def _fill_patient(page, rec: dict) -> None:
         if status != "Unknown":
             break
 
-    # Try capture carrier id from ClearCoverage if present
+    # Full ClearCoverage benefits scrape BEFORE closing verification panel
+    benefits: dict = {}
+    plan_name = None
+    effective_date = None
     carrier_id = ""
-    m = re.search(r"\b(\d{5})\b", page.locator("body").inner_text()[:2500])
-    if m:
-        carrier_id = m.group(1)
+    try:
+        benefits = scrape_clearcoverage(page)
+        plan_name = benefits.get("planName")
+        effective_date = benefits.get("effectiveDate")
+        carrier_id = str(benefits.get("carrierId") or "").strip()
+        if not benefits.get("scrapeOk"):
+            try:
+                safe = re.sub(r"[^\w\-]+", "_", rec["patient_name"])[:60]
+                page.screenshot(path=str(OUT_DIR / f"batch_benefits_fail_{safe}.png"))
+            except Exception:
+                pass
+    except Exception as scrape_exc:  # noqa: BLE001
+        benefits = {
+            "scrapeOk": False,
+            "scrapeError": f"exception:{scrape_exc}"[:240],
+            "categories": {"preventive": [], "basic": [], "major": [], "ortho": []},
+            "scrapedAt": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            safe = re.sub(r"[^\w\-]+", "_", rec["patient_name"])[:60]
+            page.screenshot(path=str(OUT_DIR / f"batch_benefits_fail_{safe}.png"))
+        except Exception:
+            pass
+
+    if not carrier_id:
+        m = re.search(r"\b(\d{5})\b", page.locator("body").inner_text()[:2500])
+        if m:
+            carrier_id = m.group(1)
 
     # Close verification if present
     close_btn = page.get_by_role("button", name="close verification")
@@ -329,8 +358,9 @@ def _fill_patient(page, rec: dict) -> None:
             "subscriber_id": rec.get("subscriber_id"),
             "verified_at": datetime.now(timezone.utc).isoformat(),
             "notes": "self" if rec.get("is_self") else f"dependent:{rec.get('relationship')}",
-            "plan_name": None,
-            "effective_date": None,
+            "plan_name": plan_name,
+            "effective_date": effective_date,
+            "benefits": benefits,
         }
     )
 
@@ -501,6 +531,16 @@ def main() -> int:
                                 "notes": f"exception:{exc}"[:240],
                                 "plan_name": None,
                                 "effective_date": None,
+                                "benefits": {
+                                    "scrapeOk": False,
+                                    "scrapeError": f"verify_exception:{exc}"[:240],
+                                    "categories": {
+                                        "preventive": [],
+                                        "basic": [],
+                                        "major": [],
+                                        "ortho": [],
+                                    },
+                                },
                             }
                         )
                     except Exception as append_exc:  # noqa: BLE001

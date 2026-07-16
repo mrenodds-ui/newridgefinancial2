@@ -135,8 +135,11 @@ def _summarize_results(path: Path) -> dict[str, Any]:
     return {"count": len(rows), "byStatus": by, "path": str(path)}
 
 
-def run_verify_batch(target: date, *, timeout_sec: int = 7200) -> dict[str, Any]:
-    """Spawn Playwright batch (headed). Requires interactive desktop + .env.vyne.local."""
+def run_verify_batch(target: date, *, timeout_sec: int = 10800) -> dict[str, Any]:
+    """Spawn Playwright batch (headed). Requires interactive desktop + .env.vyne.local.
+
+    Timeout default 3h — ClearCoverage full ADA expand is slower than status-only verify.
+    """
     if not ENV_FILE.is_file():
         return {
             "ok": False,
@@ -274,6 +277,20 @@ def insurance_verify_tick(
             }
         )
 
+    report_result: dict[str, Any] | None = None
+    if do_verify:
+        try:
+            sys.path.insert(0, str(SCRIPTS))
+            from build_trellis_eligibility_report import (  # noqa: WPS433
+                build_report_for_date,
+            )
+
+            report_result = build_report_for_date(_iso(target))
+            steps.append({"step": "eligibility_report", **report_result})
+        except Exception as exc:  # noqa: BLE001
+            report_result = {"ok": False, "error": "report_failed", "detail": str(exc)[:400]}
+            steps.append({"step": "eligibility_report", **report_result})
+
     summary = _summarize_results(results_path)
     ready = int(wl.get("ready") or 0)
     verified = int(summary.get("count") or 0)
@@ -302,6 +319,7 @@ def insurance_verify_tick(
                         "worklistTotal": wl.get("total"),
                         "results": summary,
                         "verifyRan": do_verify,
+                        "report": report_result,
                         "steps": steps,
                     },
                     "forceReopen": True,
@@ -324,6 +342,7 @@ def insurance_verify_tick(
         "worklistTotal": wl.get("total"),
         "verifyRan": do_verify,
         "results": summary,
+        "report": report_result,
         "work": work,
         "steps": steps,
     }
@@ -351,8 +370,9 @@ def format_hal_trellis_nightly_reply(query: str = "") -> str:
         "Schedule: Mon-Thu 10:00 PM local (APScheduler job nr2-trellis-verify "
         "+ optional Windows Task Scheduler headed Playwright).\n"
         "Scope: SoftDent next clinical day (Mon-Thu chairs; Thu night -> Monday).\n"
-        "Flow: SoftDent appts -> Trellis Add Patient -> Verify -> ClearCoverage results "
-        "under app_data/nr2/vyne_pulls/.\n"
+        "Flow: SoftDent appts -> Trellis Add Patient -> Verify -> ClearCoverage scrape "
+        "(deductible/max/ADA %) -> results JSON + printable HTML report under "
+        "app_data/nr2/vyne_pulls/ (trellis_eligibility_report_YYYY-MM-DD.html).\n"
         "Credentials: gitignored .env.vyne.local (Wichita password only - never Emporia).\n"
         "Gating: set NR2_TRELLIS_VERIFY=1 to drive the Trellis UI; without it HAL still "
         "builds the worklist/pending batch and opens a work item for staff.\n"

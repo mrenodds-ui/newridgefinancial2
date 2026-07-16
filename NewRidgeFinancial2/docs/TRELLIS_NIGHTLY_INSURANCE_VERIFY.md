@@ -38,6 +38,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_trellis_nigh
 ## Outputs
 `app_data/nr2/vyne_pulls/tomorrow_trellis_{add_worklist,pending_batch,verify_results}_YYYY-MM-DD.json`
 
+After headed `--verify`, also:
+`app_data/nr2/vyne_pulls/trellis_eligibility_report_YYYY-MM-DD.html`  
+(full ClearCoverage benefits: deductible, annual max, Preventive/Basic/Major/Ortho services + expanded ADA codes/%)
+
+Rebuild report only:
+```powershell
+.\.venv\Scripts\python.exe NewRidgeFinancial2\scripts\build_trellis_eligibility_report.py --date YYYY-MM-DD --open
+```
+
 Batch log (streamed): `app_data/nr2/vyne_pulls/trellis_verify_batch_YYYY-MM-DD.log`
 
 ## HAL chat

@@ -54,6 +54,9 @@ def main() -> int:
         )
         if result.get("results"):
             print("results", result["results"])
+        report = result.get("report") or {}
+        if report.get("path"):
+            print("report", report.get("path"), "withBenefits", report.get("withBenefits"))
         if result.get("error"):
             print("error", result.get("error"), result.get("detail") or "")
             return 1
